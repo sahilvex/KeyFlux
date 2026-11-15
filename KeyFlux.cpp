@@ -1,264 +1,280 @@
+
 #include <iostream>
-#include <cstring>
-#include <iomanip>
+#include <string>
+#include <limits>
 using namespace std;
-#define SIZE 5
-struct Node
+
+const int CAPACITY = 5;
+
+class Node
 {
-    char key[100];
-    char value[100];
-    int frequency;
-    int lastUsed;
+public:
+    string key;
+    string value;
+    int frequency;  
+    int lastUsed;    
     Node *prev;
     Node *next;
+
+    Node(string k, string v, int time)
+    {
+        key = k;
+        value = v;
+        frequency = 1;
+        lastUsed = time;
+        prev = NULL;
+        next = NULL;
+    }
 };
-struct Cache
+
+class Cache
 {
+private:
     Node *head;
     Node *tail;
     int count;
     int hits;
     int misses;
+    int clock;   
+
+    Node* find(const string &key)
+    {
+        for (Node *cur = head; cur != NULL; cur = cur->next)
+        {
+            if (cur->key == key)
+                return cur;
+        }
+        return NULL;
+    }
+
+    void addFront(Node *n)
+    {
+        n->next = head;
+        if (head != NULL)
+            head->prev = n;
+        else
+            tail = n;
+        head = n;
+        count++;
+    }
+
+    void removeNode(Node *n)
+    {
+        if (n->prev != NULL)
+            n->prev->next = n->next;
+        else
+            head = n->next;
+
+        if (n->next != NULL)
+            n->next->prev = n->prev;
+        else
+            tail = n->prev;
+
+        delete n;
+        count--;
+    }
+
+    Node* pickVictim()
+    {
+        Node *victim = head;
+        for (Node *cur = head; cur != NULL; cur = cur->next)
+        {
+            if (cur->frequency < victim->frequency ||
+               (cur->frequency == victim->frequency && cur->lastUsed < victim->lastUsed))
+            {
+                victim = cur;
+            }
+        }
+        return victim;
+    }
+
+    void evict()
+    {
+        Node *victim = pickVictim();
+        cout << "Cache full\n";
+        cout << "Evicted key: " << victim->key << "\n";
+        removeNode(victim);
+    }
+
+public:
+    Cache()
+    {
+        head = NULL;
+        tail = NULL;
+        count = 0;
+        hits = 0;
+        misses = 0;
+        clock = 0;
+    }
+
+    ~Cache()
+    {
+        while (head != NULL)
+            removeNode(head);
+    }
+
+    void set(const string &key, const string &value)
+    {
+        clock++;
+        Node *found = find(key);
+
+        if (found != NULL)
+        {
+            found->value = value;
+            found->frequency++;
+            found->lastUsed = clock;
+            cout << "Value updated successfully\n";
+            return;
+        }
+
+        if (count >= CAPACITY)
+            evict();
+
+        addFront(new Node(key, value, clock));
+        cout << "Key inserted successfully\n";
+    }
+
+    void get(const string &key)
+    {
+        clock++;
+        Node *found = find(key);
+
+        if (found == NULL)
+        {
+            misses++;
+            cout << "Key not found\n";
+            return;
+        }
+
+        hits++;
+        found->frequency++;
+        found->lastUsed = clock;
+        cout << "Value: " << found->value << "\n";
+    }
+
+    void del(const string &key)
+    {
+        Node *found = find(key);
+
+        if (found == NULL)
+        {
+            cout << "Key not found\n";
+            return;
+        }
+
+        removeNode(found);
+        cout << "Key deleted successfully\n";
+    }
+
+    void display()
+    {
+        if (head == NULL)
+        {
+            cout << "Cache is empty\n";
+            return;
+        }
+
+        cout << "\nCache Contents:\n";
+        for (Node *cur = head; cur != NULL; cur = cur->next)
+        {
+            cout << "Key: " << cur->key
+                 << " Value: " << cur->value
+                 << " Frequency: " << cur->frequency
+                 << " Last Used: " << cur->lastUsed << "\n";
+        }
+        cout << "Total entries: " << count << "\n";
+    }
+
+    void stats()
+    {
+        int total = hits + misses;
+
+        cout << "\nCache Statistics:\n";
+        cout << "Hits: " << hits << "\n";
+        cout << "Misses: " << misses << "\n";
+        cout << "Total entries: " << count << "\n";
+
+        if (total > 0)
+        {
+            cout << "Hit Ratio: " << hits * 100.0 / total << "%\n";
+            cout << "Miss Ratio: " << misses * 100.0 / total << "%\n";
+        }
+        else
+        {
+            cout << "No GET requests yet\n";
+        }
+    }
 };
-Cache mainCache = {NULL, NULL, 0, 0, 0};
-int timerCount = 0;
-Node* search(char key[])
+
+void showMenu()
 {
-    Node *temp = mainCache.head;
-    while (temp != NULL)
-    {
-        if (strcmp(temp->key, key) == 0)
-            return temp;
-        temp = temp->next;
-    }
-    return NULL;
+    cout << "\nKeyFlux Menu:\n";
+    cout << "1. SET\n";
+    cout << "2. GET\n";
+    cout << "3. DELETE\n";
+    cout << "4. DISPLAY\n";
+    cout << "5. STATISTICS\n";
+    cout << "6. EXIT\n";
+    cout << "Enter choice: ";
 }
-
-Node* createNode(char key[], char value[])
+string askKey()
 {
-    Node *n = new Node;
-    strcpy(n->key, key);
-    strcpy(n->value, value);
-    n->frequency = 1;
-    n->lastUsed = timerCount;
-    n->prev = NULL;
-    n->next = NULL;
-    return n;
-}
-
-void addFront(Node *n)
-{
-    n->prev = NULL;
-    n->next = mainCache.head;
-    if (mainCache.head != NULL)
-        mainCache.head->prev = n;
-    else
-        mainCache.tail = n;
-    mainCache.head = n;
-    mainCache.count++;
-}
-
-void removeNode(Node *n)
-{
-    if (n->prev != NULL)
-        n->prev->next = n->next;
-    else
-        mainCache.head = n->next;
-    if (n->next != NULL)
-        n->next->prev = n->prev;
-    else
-        mainCache.tail = n->prev;
-
-    delete n;
-    mainCache.count--;
-}
-
-Node* LRU()
-{
-    Node *temp = mainCache.head;
-    Node *oldest = mainCache.head;
-    while (temp != NULL)
-    {
-        if (temp->lastUsed < oldest->lastUsed)
-            oldest = temp;
-        temp = temp->next;
-    }
-    return oldest;
-}
-
-Node* LFU()
-{
-    Node *temp = mainCache.head;
-    Node *least = mainCache.head;
-    while (temp != NULL)
-    {
-        if (temp->frequency < least->frequency)
-        {
-            least = temp;
-        }
-        else if (temp->frequency == least->frequency)
-        {
-            if (temp->lastUsed < least->lastUsed)
-                least = temp;
-        }
-
-        temp = temp->next;
-    }
-
-    return least;
-}
-
-void EVICT()
-{
-    if (mainCache.head == NULL)
-        return;
-    Node *lruNode = LRU();
-    Node *lfuNode = LFU();
-    cout << "\nLRU candidate: " << lruNode->key << endl;
-    cout << "LFU candidate: " << lfuNode->key << endl;
-    Node *victim = lfuNode;
-    cout << "Evicted key: " << victim->key << endl;
-    removeNode(victim);
-}
-void SET(char key[], char value[])
-{
-    timerCount++;
-    Node *temp = search(key);
-    if (temp != NULL)
-    {
-        strcpy(temp->value, value);
-        temp->frequency++;
-        temp->lastUsed = timerCount;
-        cout << "Value updated successfully\n";
-        return;
-    }
-
-    if (mainCache.count >= SIZE)
-        EVICT();
-
-    Node *n = createNode(key, value);
-    addFront(n);
-
-    cout << "Key inserted successfully\n";
-}
-void GET(char key[])
-{
-    timerCount++;
-
-    Node *temp = search(key);
-
-    if (temp == NULL)
-    {
-        mainCache.misses++;
-        cout << "Key not found\n";
-        return;
-    }
-
-    mainCache.hits++;
-    temp->frequency++;
-    temp->lastUsed = timerCount;
-
-    cout << "Value: " << temp->value << endl;
-}
-void DELETE(char key[])
-{
-    Node *temp = search(key);
-
-    if (temp == NULL)
-    {
-        cout << "Key not found\n";
-        return;
-    }
-    removeNode(temp);
-
-    cout << "Key deleted successfully\n";
-}
-
-void DISPLAY()
-{
-    Node *temp = mainCache.head;
-    cout << "\nCache Contents:\n";
-    if (temp == NULL)
-    {
-        cout << "Cache is empty\n";
-        return;
-    }
-
-    while (temp != NULL)
-    {
-        cout << "Key: " << temp->key
-             << " Value: " << temp->value
-             << " Frequency: " << temp->frequency
-             << " Last Used: " << temp->lastUsed
-             << endl;
-
-        temp = temp->next;
-    }
-
-    cout << "Total entries: " << mainCache.count << endl;
-}
-
-void STATS()
-{
-    cout << "\nCache Statistics:\n";
-    cout << "Hits: " << mainCache.hits << endl;
-    cout << "Misses: " << mainCache.misses << endl;
-    cout << "Total entries: " << mainCache.count << endl;
+    string key;
+    cout << "Enter key: ";
+    cin >> key;
+    return key;
 }
 
 int main()
 {
-    int choice;
-    char key[100], value[100];
+    Cache cache;
+    int choice = 0;
+
     do
     {
-        cout << "\nKeyFlux Menu:\n";
-        cout << "1. SET\n";
-        cout << "2. GET\n";
-        cout << "3. DELETE\n";
-        cout << "4. DISPLAY\n";
-        cout << "5. STATISTICS\n";
-        cout << "6. EXIT\n";
-        cout << "Enter choice: ";
-        cin >> choice;
+        showMenu();
+
+        if (!(cin >> choice))
+        {
+            // user typed a letter, clear the error and throw the line away
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            cout << "Invalid choice\n";
+            choice = 0;
+            continue;
+        }
+
         switch (choice)
         {
             case 1:
-                cout << "Enter key: ";
-                cin >> setw(100) >> key;
-
+            {
+                string key = askKey();
+                string value;
                 cout << "Enter value: ";
-                cin >> setw(100) >> value;
-
-                SET(key, value);
+                cin.ignore();           
+                getline(cin, value);  
+                cache.set(key, value);
                 break;
+            }
             case 2:
-                cout << "Enter key: ";
-                cin >> setw(100) >> key;
-                GET(key);
+                cache.get(askKey());
                 break;
             case 3:
-                cout << "Enter key: ";
-                cin >> setw(100) >> key;
-                DELETE(key);
+                cache.del(askKey());
                 break;
             case 4:
-                DISPLAY();
+                cache.display();
                 break;
             case 5:
-                STATS();
+                cache.stats();
                 break;
             case 6:
                 cout << "Exiting KeyFlux\n";
                 break;
-
             default:
                 cout << "Invalid choice\n";
         }
-
     } while (choice != 6);
 
-    while (mainCache.head != NULL)
-        removeNode(mainCache.head);
     return 0;
 }
