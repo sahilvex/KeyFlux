@@ -2,9 +2,7 @@
 #include <cstring>
 #include <iomanip>
 using namespace std;
-
 #define SIZE 5
-
 struct Node
 {
     char key[100];
